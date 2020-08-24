@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout" layout:decorate="~{template}">
+
+<div layout:fragment="container" id="tasks">
+    <h1>
+        Tasks
+        <button class="float-right btn btn-sm btn-success" @click="showNewTaskModal = true">
+            New Task
+        </button>
+    </h1>
+    <add-edit-task :show="showNewTaskModal" @close="showNewTaskModal=false"
+        :task-for-edit="taskToBeEdited" @task-success="getTasks()"></add-edit-task>
+    <div class="row" v-if="loading">
+        <div class="col">
+            <div class="alert alert-info">
+                Loading tasks...
+            </div>
+        </div>
+    </div>
+    <div class="row" v-else v-cloak>
+        <div class="col border-right">
+            <h2 class="">ToDo</h2>
+            <div class="">
+                <div class="alert alert-info" v-if="todo.length == 0">
+                    No tasks found in this status
+                </div>
+                <div v-else>
+                    <task-card v-for="(t, idx) in todo" :key="t.status+'-'+t.id" :task="t"
+                        @edit="editTask(t)" @delete="getTasks"></task-card>
+                </div>
+            </div>
+        </div>
+        <div class="col border-right">
+            <h2 class="">Doing</h2>
+            <div class="">
+                <div class="alert alert-info" v-if="doing.length == 0">
+                    No tasks found in this status
+                </div>
+                <div v-else>
+                    <task-card v-for="(t, idx) in doing" :key="t.status+'-'+t.id" :task="t"
+                        @edit="editTask(t)" @delete="getTasks"></task-card>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <h2 class="">Done</h2>
+            <div class="">
+                <div class="alert alert-info" v-if="done.length == 0">
+                    No tasks found in this status
+                </div>
+                <div v-else>
+                    <task-card v-for="(t, idx) in done" :key="t.status+'-'+t.id" :task="t"
+                        @edit="editTask(t)" @delete="getTasks"></task-card>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<th:block layout:fragment="scripts">
+    <div th:include="vue-component/add-edit-task::template"></div>
+    <div th:include="vue-component/add-edit-task::scripts"></div>
+    <script id="task-card-template" type="text/html">
+        <div class="card mt-2 p-1">
+            <div class="card-title">
+                <strong>{{task.title}}</strong>
+                <span class="float-right">
+                    <div class="badge" :class="statusClass"
+                         title="Task status">
+                        {{task.status}}
+                    </div>
+                    &nbsp;
+                    <a @click="editTask(task)" href="javascript:void(0);">Edit</a>
+                    &nbsp;
+                    <a @click="deleteTask(task)" href="javascript:void(0);">Delete</a>
+                </span>
+            </div>
+            <div class="card-body p-0" v-if="!_.isEmpty(task.description)">
+                {{task.description}}
+            </div>
+        </div>
+    </script>
+    <script type="text/javascript">
+        $(function(){
+            Vue.component('task-card',{
+                template: '#task-card-template',
+                props: ["task"],
+                data: function(){
+                    return {}
+                },
+                computed: {
+                    statusClass: function(){
+                        if ( this.task.status == 'Todo') return 'badge-info';
+                        if ( this.task.status == 'Doing') return 'badge-primary';
+                        if ( this.task.status == 'Done') return 'badge-success';
+                    }
+                },
+                methods:{
+                    editTask: function (task) {
+                        this.$emit('edit', task);
+                    },
+                    deleteTask: function(task){
+                        var that = this;
+                        axios.delete("/api/tasks/" + task.id)
+                            .then(function(response){
+                            that.$emit('delete');
+                        });
+                    }
+                }
+            });
+            new Vue({
+                el: "#tasks",
+                data: {
+                    "showNewTaskModal": false,
+                    "taskToBeEdited": {},
+                    "loading": false,
+                    "todo": [],
+                    "doing": [],
+                    "done": []
+                },
+
+                methods: {
+                    getTasks: function(){
+                        this.loading = true;
+                        var that = this;
+                        axios.get("/api/tasks").then(function(response){
+                            var data =response.data;
+                            var groupedByStatus = _.groupBy(data, function(t){
+                                return t.status;
+                            });
+                            if ( _.has(groupedByStatus, 'Todo')){
+                                that.todo = groupedByStatus['Todo'];
+                            }else{
+                                that.todo = [];
+                            }
+
+                            if ( _.has(groupedByStatus, 'Doing')){
+                                that.doing = groupedByStatus['Doing'];
+                            }else{
+                                that.doing = [];
+                            }
+                            if ( _.has(groupedByStatus, 'Done')){
+                                that.done = groupedByStatus['Done'];
+                            }else{
+                                that.done = [];
+                            }
+                            that.loading = false;
+                        });
+                    },
+                    editTask: function (task) {
+                        this.showNewTaskModal = true;
+                        this.taskToBeEdited = task;
+                    }
+                },
+                created: function(){
+                    this.getTasks();
+                }
+            });
+        });
+    </script>
+
+</th:block>
+</html>

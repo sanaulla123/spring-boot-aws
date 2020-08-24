@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<div th:fragment="template">
+    <script id="add-edit-task-template" type="text/html">
+        <div class="modal fade centered-modal" role="dialog" id="addTaskModal">
+            <div class="modal-dialog">
+                <!-- Modal content-->
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title">New Task</h4>
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+
+                    </div>
+                    <div class="modal-body">
+                        <form class="form-horizontal" role="form" id="addTaskForm">
+                            <input v-model="id" v-if="id" type="hidden" id="id" name="id" />
+                            <div class="form-group">
+                                <label for="title">Title</label>
+                                <input v-model="title" type="text" class="form-control required" id="title"
+                                       name="title" placeholder="Title of task">
+                            </div>
+                            <div class="form-group">
+                                <label for="status">Status</label>
+                                <select v-model="status" id="status" name="status" class="form-control required">
+                                    <option value="Todo">Todo</option>
+                                    <option value="Doing">Doing</option>
+                                    <option value="Done">Done</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea v-model="description" id="description" name="description"
+                                          placeholder="Task description" class="form-control" rows="3"></textarea>
+                            </div>
+                        </form>
+                        <div class="modal-footer">
+                            <button class="btn btn-success" @click="submitForm()">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </script>
+</div>
+<div th:fragment="scripts">
+    <script type="text/javascript">
+        $(function(){
+            Vue.component('add-edit-task', {
+                template: '#add-edit-task-template',
+                props: ["show", "taskForEdit" ],
+                data: function () {
+                    return {
+                        id: "",
+                        title: "",
+                        description: "",
+                        status: "Todo"
+                    }
+                },
+                watch: {
+                    "show": function(newValue){
+                        if ( newValue){
+
+                            this.resetForm();
+                            $(this.$el).modal('show');
+                        }else{
+                            $(this.$el).modal('hide');
+                        }
+                    },
+                    taskForEdit: function(newValue){
+                        if ( newValue ){
+                            this.id = newValue.id;
+                            this.title = newValue.title;
+                            this.description = newValue.description;
+                            this.status = newValue.status;
+                        }else{
+                            this.resetForm();
+                        }
+                    }
+
+                },
+                methods: {
+                    resetForm(){
+                        this.id = "";
+                        this.title = "";
+                        this.description = "";
+                        this.status = "Todo";
+                    },
+                    setupForm: function(){
+                        var that = this;
+                        $("#addTaskForm").submit(function(){
+
+                            $(this).ajaxSubmit({
+                                target:'#warning',
+                                beforeSubmit: function(){
+                                    return $('#addTaskForm').valid();
+                                },
+                                success: function(data){
+                                    if ( that.id ){
+                                        show_success("Success", "Task updated successfully: ");
+                                    }else{
+                                        show_success("Success", "Task created successfully: ");
+                                    }
+                                    that.$emit('task-success', data);
+                                    $('#addTaskModal').modal('toggle');
+                                },
+                                error: function(response){
+                                    show_error("Error", response.responseText);
+                                },
+                                url: "/api/tasks/" + (that.id? that.id : ""),
+                                type:'POST',
+                                dataType:'text'
+                            });
+                            return false;
+                        });
+                    },
+                    submitForm: function(){
+                        $("#addTaskForm").submit();
+                    }
+
+                },
+                mounted: function(){
+                    var that = this;
+                    this.setupForm();
+                    $(this.$el).on('hide.bs.modal', function(){
+                        that.$emit('close');
+                    });
+                }
+            });
+        });
+    </script>
+</div>

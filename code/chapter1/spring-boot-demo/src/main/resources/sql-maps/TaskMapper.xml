@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bpbonline.mapper.TaskMapper">
+    <insert id="addNewTask" parameterType="com.bpbonline.model.Task" useGeneratedKeys="true" keyColumn="id"
+        keyProperty="id">
+        INSERT INTO task(title, description, status, created_by)
+        VALUES(#{title:VARCHAR}, #{description:VARCHAR}, #{status:VARCHAR}, #{createdBy:VARCHAR})
+    </insert>
+
+    <update id="editTask" parameterType="map">
+        UPDATE task SET title = #{title:VARCHAR},
+            description = #{description:VARCHAR},
+            status = #{status:VARCHAR},
+            updated_on = CURRENT_TIMESTAMP,
+            updated_by = #{updatedBy:VARCHAR}
+        WHERE id = #{id}
+    </update>
+
+    <select id="canViewTask" resultType="boolean">
+        SELECT DECODE(COUNT(id), 0, 0,1) FROM task
+        WHERE id = #{id} AND created_by = #{username}
+    </select>
+
+
+    <select id="getTaskDetail" resultType="com.bpbonline.model.Task">
+        SELECT t.id, t.title, t.description, t.status, t.created_by, cb.name "createdByName",
+            t.created_on, t.updated_on, t.updated_by, ub.name "updatedByName"
+        FROM task t
+        LEFT OUTER JOIN app_user cb ON cb.username = t.created_by
+        LEFT OUTER JOIN app_user ub ON ub.username = t.updated_by
+        WHERE t.id = #{id}
+    </select>
+
+
+    <select id="getTasks" resultType="com.bpbonline.model.Task">
+        SELECT t.id, t.title, t.description, t.status, t.created_by, cb.name "createdByName",
+            t.created_on, t.updated_on, t.updated_by, ub.name "updatedByName"
+        FROM task t
+        LEFT OUTER JOIN app_user cb ON cb.username = t.created_by
+        LEFT OUTER JOIN app_user ub ON ub.username = t.updated_by
+        WHERE t.created_by = #{username}
+    </select>
+    <delete id="deleteTask">
+        DELETE FROM task WHERE id = #{id}
+    </delete>
+</mapper>

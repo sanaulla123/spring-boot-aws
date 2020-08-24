@@ -7,8 +7,8 @@ VALUES ('mohamed', '12345', 'Mohamed', 'mohamed@gmail.com');
 INSERT INTO task(title, created_by)
 VALUES('Create a sample application for Introduction', 'sanaulla');
 
-INSERT INTO task(title, created_by)
-VALUES('Buy gas cylinder', 'sanaulla');
+INSERT INTO task(title, created_by, status)
+VALUES('Buy gas cylinder', 'sanaulla', 'Doing');
 
 INSERT INTO task(title, created_by)
 VALUES('Order water bottles', 'mohamed');
