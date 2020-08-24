@@ -39,7 +39,8 @@ public class TaskService {
     }
 
     @Transactional
-    public Task editTask(Long taskId, String title, String description, TaskStatus status, String loggedInUsername) {
+    public Task editTask(Long taskId, String title, String description,
+                         TaskStatus status, String loggedInUsername) {
 
         boolean canViewTask = taskMapper.canViewTask(loggedInUsername, taskId);
         if ( !canViewTask){
