@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout" layout:decorate="~{template}">
+
+<div layout:fragment="container" id="objects">
+    <h2>
+        Objects in bucket: [[${@environment.getProperty('app.s3-bucket-name')}]]
+    </h2>
+    <form id="upload-files-form" enctype="multipart/form-data" >
+        <div class="card">
+            <div class="card-header"><h3>Upload files</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label required">Select File (multiple supported)</label>
+                    <input type="file" multiple class="form-control required" id="uploaded-file" name="files" />
+                </div>
+            </div>
+            <div class="card-footer">
+                <button v-if="!uploadingFiles" type="button" class="btn btn-success" @click.prevent="submitForm()">Upload files</button>
+                <button v-else type="button" class="btn btn-success disabled">
+                    <i class="fa fa-spinner fa-spin"></i>&nbsp;Uploading files...
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+<th:block layout:fragment="scripts">
+
+    <script type="text/javascript">
+        $(function(){
+            new Vue({
+                el: "#objects",
+                data:{
+                    uploadingFiles: true
+                },
+                methods: {
+                    submitForm: function(){
+                        console.log("Hello");
+                        $("#upload-files-form").submit();
+                    }
+                },
+                mounted: function (){
+                    $("#upload-files-form").submit(function(){
+                        console.log("Setting up form");
+                        $(this).ajaxSubmit({
+                            beforeSubmit: function (){
+                                return $('#upload-files-form').valid();
+                            },
+                            success: function(response){
+                                toastr['success']("Success", "Successfully uploaded the files");
+                            },
+                            error: function(response){
+                                console.log(response);
+                                toastr['error']('Error', response.responseJSON.message);
+                            },
+                            url: '/api/objects/upload',
+                            type: 'POST'
+                        });
+                        return false;
+                    });
+                }
+            });
+        });
+    </script>
+
+</th:block>
+</html>
