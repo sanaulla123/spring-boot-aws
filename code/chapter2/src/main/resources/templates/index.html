@@ -23,6 +23,32 @@
             </div>
         </div>
     </form>
+    <div>&nbsp;</div>
+    <div class="alert alert-info" v-if="objects.length==0 && loadingObjects">
+        Loading the S3 objects...
+    </div>
+    <div class="alert alert-danger" v-else-if="objects.length==0 && errorLoadingObjects" v-cloak>
+        Error occurred when loading the S3 objects.
+    </div>
+    <div class="alert alert-info" v-else-if="objects.length==0" v-cloak>
+        There are no objects in your bucket.
+    </div>
+    <ul class="list-group list-group-flush" v-else v-cloak>
+        <li class="list-group-item list-group-item-action"
+            v-for="obj in objects">
+            <div class="d-flex w-100 justify-content-between">
+                <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
+                <small>
+                    {{obj.lastModified}}, {{obj.size}}
+                </small>
+            </div>
+        </li>
+    </ul>
+    <button v-if="hasMoreObjects" class="btn btn-primary" @click="loadObjects()">
+        <template v-if="loadingObjects">Loading Objects..</template>
+        <template v-else>Load More</template>
+    </button>
+
 </div>
 <th:block layout:fragment="scripts">
 
@@ -31,26 +57,59 @@
             new Vue({
                 el: "#objects",
                 data:{
-                    uploadingFiles: true
+                    uploadingFiles: false,
+                    objects:[],
+                    loadingObjects: false,
+                    errorLoadingObjects: false,
+                    markerKey: '',
+                    pageSize: 5,
+                    hasMoreObjects: true
                 },
                 methods: {
                     submitForm: function(){
-                        console.log("Hello");
                         $("#upload-files-form").submit();
+                    },
+                    loadObjects: function(){
+                        this.errorLoadingObjects = false;
+                        this.loadingObjects = true;
+                        var params = {
+                            markerKey: this.markerKey,
+                            size: this.pageSize
+                        }
+                        var that = this;
+                        $.getJSON('/api/objects/paginated', params, function(data){
+                            that.objects = that.objects.concat(data.objects);
+                            that.markerKey = data.markerKey;
+                            that.hasMoreObjects = data.truncated;
+                            that.loadingObjects = false;
+                        }).fail(function(){
+                            that.errorLoadingObjects = true;
+                            that.loadingObjects = false;
+                        });
                     }
                 },
+                created: function(){
+                    this.loadObjects();
+                },
                 mounted: function (){
+                    var that = this;
                     $("#upload-files-form").submit(function(){
-                        console.log("Setting up form");
+                        that.uploadingFiles = true;
                         $(this).ajaxSubmit({
                             beforeSubmit: function (){
-                                return $('#upload-files-form').valid();
+                                var formValidity = $('#upload-files-form').valid();
+                                if ( !formValidity){
+                                    that.uploadingFiles = false;
+                                }
+                                return formValidity;
                             },
                             success: function(response){
+                                that.uploadingFiles = false;
+                                that.loadObjects();
                                 toastr['success']("Success", "Successfully uploaded the files");
                             },
                             error: function(response){
-                                console.log(response);
+                                that.uploadingFiles = false;
                                 toastr['error']('Error', response.responseJSON.message);
                             },
                             url: '/api/objects/upload',
