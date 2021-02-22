@@ -40,6 +40,11 @@
                 <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
                 <small>
                     {{obj.lastModified}}, {{obj.size}}
+                    <a href="javascript:void(0);"
+                       title="Delete Object"
+                       @click="deleteObject(obj.key)">
+                        <i class="far fa-trash-alt text-danger"></i>
+                    </a>
                 </small>
             </div>
         </li>
@@ -86,6 +91,28 @@
                             that.errorLoadingObjects = true;
                             that.loadingObjects = false;
                         });
+                    },
+                    deleteObject: function(key){
+                        var reply = confirm("Do you want to continue with deleting the object?");
+                        if ( reply){
+                            var that = this;
+                            $.ajax({
+                                method: "DELETE",
+                                url: "/api/objects/" + key,
+                                success: function(){
+                                    toastr['success']("Success", "Successfully delete the object");
+                                    //Now remove the object from the UI state.
+                                    var index = _.findIndex(that.objects, function(obj){
+                                        return obj.key == key;
+                                    });
+                                    that.objects.splice(index, 1);
+
+                                },
+                                error: function (){
+                                    toastr['error']("Error", "Unable to delete the object");
+                                }
+                            })
+                        }
                     }
                 },
                 created: function(){

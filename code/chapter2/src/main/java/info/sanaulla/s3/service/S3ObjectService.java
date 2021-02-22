@@ -161,6 +161,19 @@ public class S3ObjectService {
         }
     }
 
+    public boolean deleteObject(String key){
+        DeleteObjectRequest deleteObjectRequest =
+                DeleteObjectRequest.builder()
+                        .bucket(s3BucketName)
+                        .key(key)
+                        .build();
+
+        DeleteObjectResponse deleteObjectResponse =
+                s3Client.deleteObject(deleteObjectRequest);
+
+        return deleteObjectResponse.sdkHttpResponse().isSuccessful();
+    }
+
     public List<Map<String, Object>> getObjectVersions(String bucket, String key){
         ListObjectVersionsRequest listObjectVersionsRequest = ListObjectVersionsRequest.builder()
                 .bucket(bucket)

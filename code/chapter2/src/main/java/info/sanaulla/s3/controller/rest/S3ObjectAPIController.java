@@ -59,6 +59,12 @@ public class S3ObjectAPIController {
 
     }
 
+    @DeleteMapping("/{key}")
+    public ResponseEntity<?> deleteObject(@PathVariable String key){
+        s3ObjectService.deleteObject(key);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFiles(@RequestParam("files") List<MultipartFile> uploadedFiles) throws IOException {
         Map<String, List<String>> response = s3ObjectService.uploadFile(uploadedFiles);
