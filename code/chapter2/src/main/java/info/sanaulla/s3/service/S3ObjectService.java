@@ -174,6 +174,26 @@ public class S3ObjectService {
         return deleteObjectResponse.sdkHttpResponse().isSuccessful();
     }
 
+    public boolean deleteObjects(List<String> keys){
+
+        List<ObjectIdentifier> objectIdentifiers = keys.stream()
+                .map(key -> ObjectIdentifier.builder().key(key).build())
+                .collect(Collectors.toList());
+
+        Delete delete = Delete.builder()
+                .objects(objectIdentifiers)
+                .build();
+
+        DeleteObjectsRequest deleteObjectsRequest = DeleteObjectsRequest.builder()
+                .bucket(s3BucketName)
+                .delete(delete)
+                .build();
+
+        DeleteObjectsResponse deleteObjectsResponse
+                = s3Client.deleteObjects(deleteObjectsRequest);
+        return deleteObjectsResponse.sdkHttpResponse().isSuccessful();
+    }
+
     public List<Map<String, Object>> getObjectVersions(String bucket, String key){
         ListObjectVersionsRequest listObjectVersionsRequest = ListObjectVersionsRequest.builder()
                 .bucket(bucket)

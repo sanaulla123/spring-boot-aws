@@ -16,13 +16,27 @@
                 </div>
             </div>
             <div class="card-footer">
-                <button v-if="!uploadingFiles" type="button" class="btn btn-success" @click.prevent="submitForm()">Upload files</button>
-                <button v-else type="button" class="btn btn-success disabled">
-                    <i class="fa fa-spinner fa-spin"></i>&nbsp;Uploading files...
+                <button v-if="!uploadingFiles" type="button" class="btn btn-success"
+                        @click.prevent="submitForm()">
+                    <svg class="bi" width="16" height="16" fill="currentColor">
+                        <use th:xlink:href="@{/css/bootstrap-icons.svg#cloud-upload}"/>
+                    </svg>&nbsp;Upload files
+                </button>
+                <button v-else type="button" class="btn btn-success disabled" v-cloak>
+                    <svg class="bi" width="16" height="16" fill="currentColor">
+                        <use th:xlink:href="@{/css/bootstrap-icons.svg#arrow-repeat}"/>
+                    </svg>&nbsp;Uploading files...
                 </button>
             </div>
         </div>
     </form>
+    <div>&nbsp;</div>
+    <button class="btn btn-danger" @click="deleteSelectedObjects()"
+        :disabled="selectedObjectsToDelete.length==0">
+        <svg class="bi" width="16" height="16" fill="currentColor">
+            <use th:xlink:href="@{/css/bootstrap-icons.svg#trash}"/>
+        </svg>&nbsp;Delete Selected
+    </button>
     <div>&nbsp;</div>
     <div class="alert alert-info" v-if="objects.length==0 && loadingObjects">
         Loading the S3 objects...
@@ -36,8 +50,13 @@
     <ul class="list-group list-group-flush" v-else v-cloak>
         <li class="list-group-item list-group-item-action"
             v-for="obj in objects">
-            <div class="d-flex w-100 justify-content-between">
-                <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
+
+            <div class="d-flex w-80 justify-content-between">
+                <span>
+                    <input class="form-check-input me-1" type="checkbox"
+                           v-model="selectedObjectsToDelete" :value="obj.key"/>
+                    <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
+                </span>
                 <small>
                     {{obj.lastModified}}, {{obj.size}}
                     <a href="javascript:void(0);"
@@ -68,13 +87,14 @@
                     errorLoadingObjects: false,
                     markerKey: '',
                     pageSize: 5,
-                    hasMoreObjects: true
+                    hasMoreObjects: true,
+                    selectedObjectsToDelete: []
                 },
                 methods: {
                     submitForm: function(){
                         $("#upload-files-form").submit();
                     },
-                    loadObjects: function(){
+                    loadObjects: function(newLoad){
                         this.errorLoadingObjects = false;
                         this.loadingObjects = true;
                         var params = {
@@ -83,7 +103,11 @@
                         }
                         var that = this;
                         $.getJSON('/api/objects/paginated', params, function(data){
-                            that.objects = that.objects.concat(data.objects);
+                            if ( newLoad){
+                                that.objects = data.objects;
+                            }else{
+                                that.objects = that.objects.concat(data.objects);
+                            }
                             that.markerKey = data.markerKey;
                             that.hasMoreObjects = data.truncated;
                             that.loadingObjects = false;
@@ -110,6 +134,26 @@
                                 },
                                 error: function (){
                                     toastr['error']("Error", "Unable to delete the object");
+                                }
+                            })
+                        }
+                    },
+                    deleteSelectedObjects: function(){
+                        var response = confirm("Do you want to delete the selected objects?");
+                        if ( response){
+                            var that = this;
+                            $.ajax({
+                                method: "DELETE",
+                                url: "/api/objects/",
+                                contentType: 'application/json',
+                                data: JSON.stringify(that.selectedObjectsToDelete),
+                                success: function(){
+                                    toastr['success']("Success", "Successfully deleted the selected objects");
+                                    that.selectedObjectsToDelete = [];
+                                    that.loadObjects(true);
+                                },
+                                error: function (){
+                                    toastr['error']("Error", "Unable to delete the selected objects");
                                 }
                             })
                         }
