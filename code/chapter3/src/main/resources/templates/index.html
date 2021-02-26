@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout" layout:decorate="~{template}">
+
+<div layout:fragment="container" id="objects">
+    <h2>
+        Objects in bucket: [[${@environment.getProperty('app.s3-bucket-name')}]]
+    </h2>
+    <form id="upload-files-form" enctype="multipart/form-data" >
+        <div class="card">
+            <div class="card-header"><h3>Upload files</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label required">Select File (multiple supported)</label>
+                    <input type="file" multiple class="form-control required" id="uploaded-file" name="files" />
+                </div>
+            </div>
+            <div class="card-footer">
+                <button v-if="!uploadingFiles" type="button" class="btn btn-success"
+                        @click.prevent="submitForm()">
+                    <svg class="bi" width="16" height="16" fill="currentColor">
+                        <use th:xlink:href="@{/css/bootstrap-icons.svg#cloud-upload}"/>
+                    </svg>&nbsp;Upload files
+                </button>
+                <button v-else type="button" class="btn btn-success disabled" v-cloak>
+                    <svg class="bi" width="16" height="16" fill="currentColor">
+                        <use th:xlink:href="@{/css/bootstrap-icons.svg#arrow-repeat}"/>
+                    </svg>&nbsp;Uploading files...
+                </button>
+            </div>
+        </div>
+    </form>
+    <div>&nbsp;</div>
+    <button class="btn btn-danger" @click="deleteSelectedObjects()"
+        :disabled="selectedObjectsToDelete.length==0">
+        <svg class="bi" width="16" height="16" fill="currentColor">
+            <use th:xlink:href="@{/css/bootstrap-icons.svg#trash}"/>
+        </svg>&nbsp;Delete Selected
+    </button>
+    <div>&nbsp;</div>
+    <div class="alert alert-info" v-if="objects.length==0 && loadingObjects">
+        Loading the S3 objects...
+    </div>
+    <div class="alert alert-danger" v-else-if="objects.length==0 && errorLoadingObjects" v-cloak>
+        Error occurred when loading the S3 objects.
+    </div>
+    <div class="alert alert-info" v-else-if="objects.length==0" v-cloak>
+        There are no objects in your bucket.
+    </div>
+    <ul class="list-group list-group-flush" v-else v-cloak>
+        <li class="list-group-item list-group-item-action"
+            v-for="obj in objects">
+
+            <div class="d-flex w-80 justify-content-between">
+                <span>
+                    <input class="form-check-input me-1" type="checkbox"
+                           v-model="selectedObjectsToDelete" :value="obj.key"/>
+                    <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
+                </span>
+                <small>
+                    {{obj.lastModified}}, {{obj.size}}
+                    <a href="javascript:void(0);"
+                       title="Delete Object"
+                       @click="deleteObject(obj.key)">
+                        <i class="far fa-trash-alt text-danger"></i>
+                    </a>
+                </small>
+            </div>
+        </li>
+    </ul>
+    <button v-if="hasMoreObjects" class="btn btn-primary" @click="loadObjects()">
+        <template v-if="loadingObjects">Loading Objects..</template>
+        <template v-else>Load More</template>
+    </button>
+
+</div>
+<th:block layout:fragment="scripts">
+
+    <script type="text/javascript">
+        $(function(){
+            new Vue({
+                el: "#objects",
+                data:{
+                    uploadingFiles: false,
+                    objects:[],
+                    loadingObjects: false,
+                    errorLoadingObjects: false,
+                    markerKey: '',
+                    pageSize: 5,
+                    hasMoreObjects: true,
+                    selectedObjectsToDelete: []
+                },
+                methods: {
+                    submitForm: function(){
+                        $("#upload-files-form").submit();
+                    },
+                    loadObjects: function(newLoad){
+                        this.errorLoadingObjects = false;
+                        this.loadingObjects = true;
+                        var params = {
+                            markerKey: this.markerKey,
+                            size: this.pageSize
+                        }
+                        var that = this;
+                        $.getJSON('/api/objects/paginated', params, function(data){
+                            if ( newLoad){
+                                that.objects = data.objects;
+                            }else{
+                                that.objects = that.objects.concat(data.objects);
+                            }
+                            that.markerKey = data.markerKey;
+                            that.hasMoreObjects = data.truncated;
+                            that.loadingObjects = false;
+                        }).fail(function(){
+                            that.errorLoadingObjects = true;
+                            that.loadingObjects = false;
+                        });
+                    },
+                    deleteObject: function(key){
+                        var reply = confirm("Do you want to continue with deleting the object?");
+                        if ( reply){
+                            var that = this;
+                            $.ajax({
+                                method: "DELETE",
+                                url: "/api/objects/" + key,
+                                success: function(){
+                                    toastr['success']("Success", "Successfully delete the object");
+                                    //Now remove the object from the UI state.
+                                    var index = _.findIndex(that.objects, function(obj){
+                                        return obj.key == key;
+                                    });
+                                    that.objects.splice(index, 1);
+
+                                },
+                                error: function (){
+                                    toastr['error']("Error", "Unable to delete the object");
+                                }
+                            })
+                        }
+                    },
+                    deleteSelectedObjects: function(){
+                        var response = confirm("Do you want to delete the selected objects?");
+                        if ( response){
+                            var that = this;
+                            $.ajax({
+                                method: "DELETE",
+                                url: "/api/objects/",
+                                contentType: 'application/json',
+                                data: JSON.stringify(that.selectedObjectsToDelete),
+                                success: function(){
+                                    toastr['success']("Success", "Successfully deleted the selected objects");
+                                    that.selectedObjectsToDelete = [];
+                                    that.loadObjects(true);
+                                },
+                                error: function (){
+                                    toastr['error']("Error", "Unable to delete the selected objects");
+                                }
+                            })
+                        }
+                    }
+                },
+                created: function(){
+                    this.loadObjects();
+                },
+                mounted: function (){
+                    var that = this;
+                    $("#upload-files-form").submit(function(){
+                        that.uploadingFiles = true;
+                        $(this).ajaxSubmit({
+                            beforeSubmit: function (){
+                                var formValidity = $('#upload-files-form').valid();
+                                if ( !formValidity){
+                                    that.uploadingFiles = false;
+                                }
+                                return formValidity;
+                            },
+                            success: function(response){
+                                that.uploadingFiles = false;
+                                that.loadObjects();
+                                toastr['success']("Success", "Successfully uploaded the files");
+                            },
+                            error: function(response){
+                                that.uploadingFiles = false;
+                                toastr['error']('Error', response.responseJSON.message);
+                            },
+                            url: '/api/objects/upload',
+                            type: 'POST'
+                        });
+                        return false;
+                    });
+                }
+            });
+        });
+    </script>
+
+</th:block>
+</html>
