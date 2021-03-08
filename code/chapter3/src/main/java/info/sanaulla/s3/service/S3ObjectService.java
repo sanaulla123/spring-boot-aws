@@ -11,15 +11,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import org.thymeleaf.util.MapUtils;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.paginators.ListObjectVersionsIterable;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URL;
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -29,6 +38,8 @@ import java.util.stream.Stream;
 public class S3ObjectService {
 
     @Autowired S3Client s3Client;
+    @Autowired S3Presigner s3Presigner;
+
     @Value("${app.s3-bucket-name}") String s3BucketName;
 
     public Map<String, List<String>> uploadFile(List<MultipartFile> files) throws IOException{
@@ -122,9 +133,9 @@ public class S3ObjectService {
 
         Map<String, List<S3ObjectVersion>> objectVersionsWithMarker =
                 Stream.concat(objectVersionsStream, deleteMarkersStream)
-                .sorted(Comparator.comparing(S3ObjectVersion::getLastModified))
-                        .collect(Collectors.groupingBy(ov -> ov.getKey(),
-                                Collectors.toList()));
+                        .sorted(Comparator.comparing(S3ObjectVersion::getLastModified).reversed())
+                        .collect(Collectors.groupingBy(ov -> ov.getKey()));
+
         return objectVersionsWithMarker;
     }
 
@@ -168,20 +179,34 @@ public class S3ObjectService {
         return new S3ObjectList(objects, nextMarker, listObjectsResponse.isTruncated());
     }
 
-    public GetObjectResponse getObjectContent(String key, OutputStream outputStream)
-            throws IOException {
+    public ResponseInputStream<GetObjectResponse> getObjectVersionContent(
+            String key, String versionId){
+
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(s3BucketName)
                 .key(key)
+                .versionId(versionId)
                 .build();
-        long bytesTransferred = 0;
-        try(ResponseInputStream<GetObjectResponse> objectStream =
-                    s3Client.getObject(getObjectRequest)){
-            GetObjectResponse response = objectStream.response();
-            bytesTransferred = objectStream.transferTo(outputStream);
-            log.debug("Bytes transferred: {}", bytesTransferred);
-            return response;
-        }
+
+        ResponseInputStream<GetObjectResponse> responseInputStream =
+                s3Client.getObject(getObjectRequest);
+
+        return responseInputStream;
+
+    }
+
+    public boolean deleteObjectVersion(String key, String versionId){
+        DeleteObjectRequest deleteObjectRequest =
+                DeleteObjectRequest.builder()
+                        .bucket(s3BucketName)
+                        .key(key)
+                        .versionId(versionId)
+                        .build();
+
+        DeleteObjectResponse deleteObjectResponse =
+                s3Client.deleteObject(deleteObjectRequest);
+
+        return deleteObjectResponse.sdkHttpResponse().isSuccessful();
     }
 
     public boolean deleteObject(String key){
@@ -234,5 +259,53 @@ public class S3ObjectService {
             ovMap.put("latest", objectVersion.isLatest());
             return ovMap;
         }).collect(Collectors.toList());
+    }
+
+    public URL getObjectVersionPresignedUrlToRead(String key, String versionId){
+        try {
+            GetObjectRequest objectRequest = GetObjectRequest.builder()
+                    .bucket(s3BucketName)
+                    .key(key)
+                    .versionId(versionId)
+                    .responseContentDisposition("attachment; filename=" + key)
+                    .build();
+
+            GetObjectPresignRequest objectPresignRequest =
+                    GetObjectPresignRequest.builder()
+                            .getObjectRequest(objectRequest)
+                            .signatureDuration(Duration.ofMinutes(5))
+                            .build();
+
+            PresignedGetObjectRequest presignedGetObjectRequest =
+                    s3Presigner.presignGetObject(objectPresignRequest);
+
+
+            return presignedGetObjectRequest.url();
+        }finally {
+            s3Presigner.close();
+        }
+
+    }
+
+    public URL getPresignedUrlToPost(){
+        try {
+            PutObjectRequest putObjectRequest =
+                    PutObjectRequest.builder()
+                            .bucket(s3BucketName)
+                            .build();
+
+            PutObjectPresignRequest objectPresignRequest =
+                    PutObjectPresignRequest.builder()
+                            .putObjectRequest(putObjectRequest)
+                            .build();
+
+            PresignedPutObjectRequest presignedPutObjectRequest =
+                    s3Presigner.presignPutObject(objectPresignRequest);
+
+            return presignedPutObjectRequest.url();
+
+        }finally {
+            s3Presigner.close();
+        }
     }
 }

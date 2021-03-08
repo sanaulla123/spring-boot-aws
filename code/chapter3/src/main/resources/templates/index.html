@@ -31,47 +31,84 @@
         </div>
     </form>
     <div>&nbsp;</div>
-    <button class="btn btn-danger" @click="deleteSelectedObjects()"
-        :disabled="selectedObjectsToDelete.length==0">
-        <svg class="bi" width="16" height="16" fill="currentColor">
-            <use th:xlink:href="@{/css/bootstrap-icons.svg#trash}"/>
-        </svg>&nbsp;Delete Selected
-    </button>
-    <div>&nbsp;</div>
-    <div class="alert alert-info" v-if="objects.length==0 && loadingObjects">
+    <div class="alert alert-info" v-if="loadingObjects">
         Loading the S3 objects...
     </div>
-    <div class="alert alert-danger" v-else-if="objects.length==0 && errorLoadingObjects" v-cloak>
+    <div class="alert alert-danger" v-else-if="errorLoadingObjects" v-cloak>
         Error occurred when loading the S3 objects.
     </div>
-    <div class="alert alert-info" v-else-if="objects.length==0" v-cloak>
+    <div class="alert alert-info" v-else-if="_.isEmpty(versions)" v-cloak>
         There are no objects in your bucket.
     </div>
-    <ul class="list-group list-group-flush" v-else v-cloak>
-        <li class="list-group-item list-group-item-action"
-            v-for="obj in objects">
-
-            <div class="d-flex w-80 justify-content-between">
-                <span>
-                    <input class="form-check-input me-1" type="checkbox"
-                           v-model="selectedObjectsToDelete" :value="obj.key"/>
-                    <a :href="'/api/objects/' + obj.key">{{obj.key}}</a>
-                </span>
-                <small>
-                    {{obj.lastModified}}, {{obj.size}}
-                    <a href="javascript:void(0);"
-                       title="Delete Object"
-                       @click="deleteObject(obj.key)">
-                        <i class="far fa-trash-alt text-danger"></i>
-                    </a>
-                </small>
-            </div>
-        </li>
-    </ul>
-    <button v-if="hasMoreObjects" class="btn btn-primary" @click="loadObjects()">
+    <table v-else v-cloak class="table">
+        <thead>
+            <tr>
+                <td>Name</td>
+                <td>Version Id</td>
+                <td>Type</td>
+                <td>Last Modified</td>
+                <td>Size</td>
+                <td></td>
+            </tr>
+        </thead>
+        <tbody>
+            <template v-for="(ver,key) in versions">
+                <tr>
+                    <td colspan="5">{{key}}</td>
+                    <td>
+                        <a href="javascript:void(0);" @click="deleteObject(key)"
+                            title="Delete Object">
+                            <svg class="bi text-danger" width="16" height="16" fill="currentColor">
+                                <use th:xlink:href="@{/css/bootstrap-icons.svg#trash}"/>
+                            </svg>
+                        </a>
+                    </td>
+                </tr>
+                <tr v-for="obj in ver">
+                    <!--<td>
+                        <input class="form-check-input me-1" type="checkbox"
+                               v-model="selectedObjectsToDelete" :value="obj.key"/>
+                    </td>-->
+                    <td>
+                        <a v-if="!obj.deleteMarker" class="ms-2"
+                           :href="'/api/objects/'+obj.key+'/versions/'+obj.versionId + '/presigned'">
+                            {{obj.key}}
+                        </a>
+                        <span v-else class="ms-2">
+                            {{obj.key}}
+                        </span>
+                    </td>
+                    <td>
+                        {{obj.versionId}}&nbsp;
+                        <span v-if="obj.latest" title="Latest Version">
+                            <svg class="bi text-success" width="16" height="16" fill="currentColor">
+                                <use th:xlink:href="@{/css/bootstrap-icons.svg#check-circle}"/>
+                            </svg>&nbsp;
+                        </span>
+                    </td>
+                    <td>
+                        <template v-if="obj.deleteMarker">
+                            Delete Marker
+                        </template>
+                    </td>
+                    <td>{{obj.lastModified}}</td>
+                    <td>{{obj.size}}</td>
+                    <td>
+                        <a href="javascript:void(0);" @click="deleteObjectVersion(obj.key, obj.versionId)"
+                            title="Delete Object Version">
+                            <svg class="bi text-danger" width="16" height="16" fill="currentColor">
+                                <use th:xlink:href="@{/css/bootstrap-icons.svg#trash}"/>
+                            </svg>
+                        </a>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+    <!--<button v-if="hasMoreObjects" class="btn btn-primary" @click="loadObjects()">
         <template v-if="loadingObjects">Loading Objects..</template>
         <template v-else>Load More</template>
-    </button>
+    </button>-->
 
 </div>
 <th:block layout:fragment="scripts">
@@ -82,17 +119,31 @@
                 el: "#objects",
                 data:{
                     uploadingFiles: false,
-                    objects:[],
+                    versions:{},
+                    objects: [],
                     loadingObjects: false,
                     errorLoadingObjects: false,
                     markerKey: '',
                     pageSize: 5,
                     hasMoreObjects: true,
-                    selectedObjectsToDelete: []
+                    selectedObjectsToDelete: [],
+                    selectedVersionsToDelete: []
                 },
                 methods: {
                     submitForm: function(){
                         $("#upload-files-form").submit();
+                    },
+                    loadObjectVersions: function(){
+                        this.errorLoadingObjects = false;
+                        this.loadingObjects = true;
+                        var that = this;
+                        $.getJSON('/api/objects/', function(data){
+                            that.versions = data;
+                            that.loadingObjects = false;
+                        }).fail(function(){
+                            that.errorLoadingObjects = true;
+                            that.loadingObjects = false;
+                        });
                     },
                     loadObjects: function(newLoad){
                         this.errorLoadingObjects = false;
@@ -116,6 +167,24 @@
                             that.loadingObjects = false;
                         });
                     },
+                    deleteObjectVersion: function(key,versionId){
+                        var reply = confirm("Do you want to continue with deleting the object version?");
+                        if ( !reply ){ return; }
+
+                        var that = this;
+                        $.ajax({
+                            method: "DELETE",
+                            url: "/api/objects/" + key + '/versions/' + versionId,
+                            success: function(){
+                                toastr['success']("Success", "Successfully delete the object version");
+                                //reload the data
+                                that.loadObjectVersions();
+                            },
+                            error: function (){
+                                toastr['error']("Error", "Unable to delete the object version");
+                            }
+                        })
+                    },
                     deleteObject: function(key){
                         var reply = confirm("Do you want to continue with deleting the object?");
                         if ( reply){
@@ -125,11 +194,8 @@
                                 url: "/api/objects/" + key,
                                 success: function(){
                                     toastr['success']("Success", "Successfully delete the object");
-                                    //Now remove the object from the UI state.
-                                    var index = _.findIndex(that.objects, function(obj){
-                                        return obj.key == key;
-                                    });
-                                    that.objects.splice(index, 1);
+                                    //reload the data
+                                    that.loadObjectVersions();
 
                                 },
                                 error: function (){
@@ -150,7 +216,7 @@
                                 success: function(){
                                     toastr['success']("Success", "Successfully deleted the selected objects");
                                     that.selectedObjectsToDelete = [];
-                                    that.loadObjects(true);
+                                    that.loadObjectVersions();
                                 },
                                 error: function (){
                                     toastr['error']("Error", "Unable to delete the selected objects");
@@ -160,7 +226,7 @@
                     }
                 },
                 created: function(){
-                    this.loadObjects();
+                    this.loadObjectVersions();
                 },
                 mounted: function (){
                     var that = this;
@@ -176,7 +242,7 @@
                             },
                             success: function(response){
                                 that.uploadingFiles = false;
-                                that.loadObjects();
+                                that.loadObjectVersions();
                                 toastr['success']("Success", "Successfully uploaded the files");
                             },
                             error: function(response){

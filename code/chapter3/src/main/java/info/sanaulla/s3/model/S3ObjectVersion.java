@@ -1,6 +1,7 @@
 package info.sanaulla.s3.model;
 
 import lombok.Data;
+import org.springframework.util.unit.DataSize;
 import software.amazon.awssdk.services.s3.model.DeleteMarkerEntry;
 import software.amazon.awssdk.services.s3.model.ObjectVersion;
 
@@ -12,7 +13,7 @@ public class S3ObjectVersion {
     String versionId;
     boolean latest;
     Instant lastModified;
-    Long size;
+    String size;
     Boolean deleteMarker;
 
     public S3ObjectVersion(ObjectVersion objectVersion){
@@ -20,7 +21,7 @@ public class S3ObjectVersion {
         this.versionId = objectVersion.versionId();
         this.latest = objectVersion.isLatest();
         this.lastModified = objectVersion.lastModified();
-        this.size = objectVersion.size();
+        this.size = DataSize.ofBytes(objectVersion.size()).toKilobytes()+"KB";
         this.deleteMarker = false;
     }
 
